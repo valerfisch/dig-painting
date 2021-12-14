@@ -6,68 +6,17 @@ use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::{Point, Rect};
 use sdl2::render::{Texture, WindowCanvas};
-use std::fmt;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration; // Import `fmt`
 
-#[derive(Debug)]
-struct Brush {
-    texture_path: String,
-    dimensions: (u32, u32),
-}
-
-// Similarly, implement `Display` for `Point2D`
-impl fmt::Display for Brush {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Customize so only `x` and `y` are denoted.
-        write!(
-            f,
-            "texture_path: {}, dimensions.x: {}, dimensions.y: {}",
-            self.texture_path, self.dimensions.0, self.dimensions.1,
-        )
-    }
-}
-
-#[derive(Debug)]
-struct Stroke {
-    // top-left corner
-    position: Point,
-    rotation: f64,
-    // RGB
-    scale: f32,
-    color: Color,
-    opacity: u8,
-}
-
-// Similarly, implement `Display` for `Point2D`
-impl fmt::Display for Stroke {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Customize so only `x` and `y` are denoted.
-        write!(
-            f,
-            "position.x: {}, posistion.y: {}, rotation: {}, scale: {}, color: {} {} {}, opacity: {}",
-            self.position.x(),
-            self.position.y(),
-            self.rotation,
-            self.scale,
-            self.color.r,
-            self.color.g,
-            self.color.b,
-            self.opacity,
-        )
-    }
-}
-
-struct Image {
-    strokes: Vec<(Stroke, Rc<Brush>)>,
-}
+mod generation;
 
 fn render(
     canvas: &mut WindowCanvas,
     color: Color,
     texture: &mut Texture,
-    image: &Image,
+    image: &generation::artistic::Image,
 ) -> Result<(), String> {
     canvas.set_draw_color(color);
     canvas.clear();
@@ -97,6 +46,11 @@ fn render(
 }
 
 fn main() -> Result<(), String> {
+    generation::artistic::init_brushes();
+    generation::comparison::open_target_image();
+
+    /*
+
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
 
@@ -113,12 +67,12 @@ fn main() -> Result<(), String> {
         .build()
         .expect("could not make a canvas");
 
-    let brush = Rc::new(Brush {
+    let brush = Rc::new(generation::artistic::Brush {
         dimensions: (2267, 906),
         texture_path: "assets/stroke_2.png".to_string(),
     });
 
-    let stroke = Stroke {
+    let stroke = generation::artistic::Stroke {
         position: Point::new(100, 0),
         rotation: 1.0,
         // RGB
@@ -127,7 +81,7 @@ fn main() -> Result<(), String> {
         opacity: 70,
     };
 
-    let stroke2 = Stroke {
+    let stroke2 = generation::artistic::Stroke {
         position: Point::new(100, 100),
         rotation: 45.0,
         // RGB
@@ -136,7 +90,7 @@ fn main() -> Result<(), String> {
         opacity: 150,
     };
 
-    let mut image = Image {
+    let mut image = generation::artistic::Image {
         strokes: Vec::new(),
     };
 
@@ -184,6 +138,7 @@ fn main() -> Result<(), String> {
         // Time management!
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
+    */
 
     Ok(())
 }
