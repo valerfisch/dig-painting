@@ -12,13 +12,8 @@ use std::time::Duration; // Import `fmt`
 
 mod generation;
 
-fn render(
-    canvas: &mut WindowCanvas,
-    color: Color,
-    texture: &mut Texture,
-    image: &generation::artistic::Image,
-) -> Result<(), String> {
-    canvas.set_draw_color(color);
+fn render(canvas: &mut WindowCanvas, image: &generation::artistic::Image) -> Result<(), String> {
+    canvas.set_draw_color(image.color);
     canvas.clear();
 
     let (width, height) = canvas.output_size()?;
@@ -26,18 +21,28 @@ fn render(
     for i in &image.strokes {
         let sprite = Rect::new(0, 0, i.1.dimensions.0, i.1.dimensions.1);
 
-        let screen_position = i.0.position + Point::new(width as i32 / 4, height as i32 / 2);
+        let screen_position = i.0.position;
         let screen_rect = Rect::from_center(
             screen_position,
-            (sprite.width() as f32 * i.0.scale / 16.0) as u32,
-            (sprite.height() as f32 * i.0.scale / 16.0) as u32,
+            (sprite.width() as f32 * i.0.scale) as u32,
+            (sprite.height() as f32 * i.0.scale) as u32,
         );
+
+        let texture_creator = canvas.texture_creator();
+        let mut texture = texture_creator.load_texture(i.1.texture_path.clone())?;
 
         texture.set_alpha_mod(i.0.opacity);
         texture.set_color_mod(i.0.color.r, i.0.color.g, i.0.color.b);
 
-        // canvas.copy(texture, sprite, screen_rect)?;
-        canvas.copy_ex(texture, None, screen_rect, i.0.rotation, None, false, false)?;
+        canvas.copy_ex(
+            &texture,
+            None,
+            screen_rect,
+            i.0.rotation * 360.0,
+            None,
+            false,
+            false,
+        )?;
     }
 
     canvas.present();
@@ -46,18 +51,14 @@ fn render(
 }
 
 fn main() -> Result<(), String> {
-    generation::artistic::init_brushes();
-    generation::comparison::open_target_image();
-
-    /*
+    let target = generation::comparison::open_target_image();
 
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
-
     let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG)?;
 
     let window = video_subsystem
-        .window("game tutorial", 1920, 1080)
+        .window("dig painting", target.dimensions.0, target.dimensions.1)
         .position_centered()
         .build()
         .expect("could not initialize video subsystem");
@@ -67,11 +68,46 @@ fn main() -> Result<(), String> {
         .build()
         .expect("could not make a canvas");
 
-    let brush = Rc::new(generation::artistic::Brush {
-        dimensions: (2267, 906),
-        texture_path: "assets/stroke_2.png".to_string(),
-    });
+    let brushes = generation::artistic::init_brushes();
 
+    let mut image = generation::artistic::init_image(&target);
+
+    let mut event_pump = sdl_context.event_pump()?;
+
+    let mut i = 0;
+    'running: loop {
+        // Handle events
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
+                    break 'running;
+                }
+                _ => {}
+            }
+        }
+
+        image = image.paint(&brushes);
+
+        // Render
+        render(&mut canvas, &image)?;
+
+        // Update
+        i += 1;
+        // save image
+        let buffer: &[u8] =
+            &canvas.read_pixels(Rect::from((0, 0, 1920, 1080)), PixelFormatEnum::ABGR8888)?;
+
+        let name = format!("./rendered/image-{}.png", i);
+
+        image::save_buffer(&Path::new(&name), buffer, 1920, 1080, ColorType::Rgba8)
+            .expect("Could not save image");
+    }
+
+    /*
     let stroke = generation::artistic::Stroke {
         position: Point::new(100, 0),
         rotation: 1.0,
@@ -90,53 +126,12 @@ fn main() -> Result<(), String> {
         opacity: 150,
     };
 
-    let mut image = generation::artistic::Image {
-        strokes: Vec::new(),
-    };
-
     image.strokes.push((stroke, brush.clone()));
     image.strokes.push((stroke2, brush.clone()));
 
     let texture_creator = canvas.texture_creator();
     let mut texture = texture_creator.load_texture(brush.texture_path.clone())?;
 
-    let mut event_pump = sdl_context.event_pump()?;
-    let mut i = 0;
-    'running: loop {
-        // Handle events
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    let buffer: &[u8] = &canvas
-                        .read_pixels(Rect::from((0, 0, 1920, 1080)), PixelFormatEnum::ABGR8888)?;
-                    image::save_buffer(
-                        &Path::new("image.png"),
-                        buffer,
-                        1920,
-                        1080,
-                        ColorType::Rgba8,
-                    )
-                    .expect("Could not save image");
-                    break 'running;
-                }
-                _ => {}
-            }
-        }
-
-        // Update
-        i = (i + 1) % 255;
-
-        // Render
-        render(&mut canvas, Color::RGB(80, 80, 80), &mut texture, &image)?;
-
-        image.strokes[1].0.rotation += 1.0;
-
-        // Time management!
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
     */
 
