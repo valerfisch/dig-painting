@@ -1,3 +1,5 @@
+use crate::generation::comparison;
+use rand::Rng;
 use sdl2::pixels::Color;
 use sdl2::rect::Point;
 use std::fmt;
@@ -5,7 +7,6 @@ use std::fs;
 use std::io;
 use std::rc::Rc;
 
-#[derive(Debug)]
 pub struct Brush {
   pub texture_path: String,
   pub dimensions: (u32, u32),
@@ -54,7 +55,39 @@ impl fmt::Display for Stroke {
 }
 
 pub struct Image {
+  pub dimensions: (u32, u32),
+  pub color: Color,
   pub strokes: Vec<(Stroke, Rc<Brush>)>,
+}
+
+impl Image {
+  pub fn paint(mut self, brushes: &Vec<Brush>) -> Image {
+    let mut rng = rand::thread_rng();
+
+    let stroke = Stroke {
+      position: Point::new(
+        rng.gen_range(0..self.dimensions.0).try_into().unwrap(),
+        rng.gen_range(0..self.dimensions.1).try_into().unwrap(),
+      ),
+      rotation: rng.gen::<f64>(),
+      // RGB
+      scale: rng.gen::<f32>(),
+      color: Color::RGB(rng.gen(), rng.gen(), rng.gen()),
+      opacity: rng.gen(),
+    };
+
+    let idx = rng.gen_range(0..brushes.len());
+
+    let brush = Rc::new(Brush {
+      texture_path: brushes[idx].texture_path.clone(),
+      dimensions: (
+        brushes[idx].dimensions.0.clone(),
+        brushes[idx].dimensions.1.clone(),
+      ),
+    });
+    self.strokes.push((stroke, brush.clone()));
+    self
+  }
 }
 
 pub fn init_brushes() -> Vec<Brush> {
@@ -91,4 +124,12 @@ pub fn init_brushes() -> Vec<Brush> {
   }
 
   brushes
+}
+
+pub fn init_image(target: &comparison::Target) -> Image {
+  Image {
+    strokes: Vec::new(),
+    color: Color::from((33, 33, 33)),
+    dimensions: (target.dimensions.0, target.dimensions.1),
+  }
 }
