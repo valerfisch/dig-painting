@@ -61,6 +61,7 @@ fn render(
 
 fn main() -> Result<(), String> {
     let target = generation::comparison::open_target_image();
+    let palette = generation::artistic::init_palette(&target);
 
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
@@ -110,7 +111,7 @@ fn main() -> Result<(), String> {
             }
         }
 
-        image = image.paint(&brushes, step);
+        image = image.paint(&brushes, &palette);
 
         // Render
         render(&mut canvas, &image, &mut brush_textures)?;
