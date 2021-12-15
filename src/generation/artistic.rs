@@ -7,6 +7,12 @@ use std::fs;
 use std::io;
 use std::rc::Rc;
 
+use super::comparison::Target;
+
+pub struct Palette {
+    colors: Vec<Color>,
+}
+
 pub struct Brush {
     pub texture_path: String,
     pub dimensions: (u32, u32),
@@ -61,7 +67,7 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn paint(mut self, brushes: &Vec<Brush>, i: i32) -> Image {
+    pub fn paint(mut self, brushes: &Vec<Brush>, palette: &Palette) -> Image {
         let mut rng = rand::thread_rng();
 
         let stroke = Stroke {
@@ -71,9 +77,9 @@ impl Image {
             ),
             rotation: rng.gen::<f64>(),
             // RGB
-            scale: rng.gen::<f32>() / (i as f32 / 25.0),
-            color: Color::RGB(rng.gen(), rng.gen(), rng.gen()),
-            opacity: rng.gen(),
+            scale: rng.gen_range(0.5 as f32..1.25 as f32) / (2.0 as f32),
+            color: palette.colors[rng.gen_range(0..palette.colors.len())].clone(),
+            opacity: rng.gen_range(0..185),
         };
 
         let idx = rng.gen_range(0..brushes.len());
@@ -132,4 +138,37 @@ pub fn init_image(target: &comparison::Target) -> Image {
         color: Color::from((33, 33, 33)),
         dimensions: (target.dimensions.0, target.dimensions.1),
     }
+}
+
+pub fn init_palette(tar: &Target) -> Palette {
+    let mut colors: Vec<Color> = Vec::new();
+
+    let row_width = 100;
+    let col_height = 100;
+
+    let row_count = tar.dimensions.1 / 100;
+    let col_count = tar.dimensions.0 / 100;
+
+    for row in 0..row_count {
+        for col in 0..col_count {
+            let mut c = Color::RGB(0, 0, 0);
+            for y in 0..col_height {
+                for x in 0..row_width {
+                    let x_pos = col * row_width + x;
+                    let y_pos = row * col_height + y;
+                    let image::Rgba(p) = tar.image.get_pixel(x_pos as u32, y_pos as u32);
+                    let [mut r, mut g, mut b, _] = &p;
+
+                    r = ((c.r as u16 + r as u16) / 2) as u8;
+                    g = ((c.g as u16 + g as u16) / 2) as u8;
+                    b = ((c.b as u16 + b as u16) / 2) as u8;
+
+                    c = Color::RGB(r, g, b)
+                }
+            }
+            colors.push(c)
+        }
+    }
+
+    return Palette { colors };
 }
