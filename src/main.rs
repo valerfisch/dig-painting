@@ -7,10 +7,6 @@ use sdl2::render::{Texture, WindowCanvas};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/**
-TODO: - texture loading not in rendering function
-      - calculate difference
-*/
 mod generation;
 
 fn render(
@@ -24,13 +20,10 @@ fn render(
     // let (width, height) = canvas.output_size()?;
 
     for i in &image.strokes {
-        let sprite = Rect::new(0, 0, i.1.dimensions.0, i.1.dimensions.1);
-
-        let screen_position = i.0.position;
-        let screen_rect = Rect::from_center(
-            screen_position,
-            (sprite.width() as f32 * i.0.scale) as u32,
-            (sprite.height() as f32 * i.0.scale) as u32,
+        let sprite = Rect::from_center(
+            i.0.position,
+            (i.1.dimensions.0 as f32 * i.0.scale) as u32,
+            (i.1.dimensions.1 as f32 * i.0.scale) as u32,
         );
 
         let texture = brush_textures
@@ -43,14 +36,13 @@ fn render(
         canvas.copy_ex(
             &texture,
             None,
-            screen_rect,
+            sprite,
             i.0.rotation * 360.0,
             None,
             false,
             false,
         )?;
     }
-
     canvas.present();
 
     Ok(())
@@ -89,10 +81,13 @@ fn main() -> Result<(), String> {
 
     let mut event_pump = sdl_context.event_pump()?;
 
-    let mut delta = f32::MAX;
+    let mut delta = f64::MAX;
 
     let mut i = 0;
     let mut step = 0;
+    let mut last_increment = 0;
+    let mut lod = 2;
+
     'running: loop {
         // Handle events
         for event in event_pump.poll_iter() {
@@ -108,7 +103,7 @@ fn main() -> Result<(), String> {
             }
         }
 
-        image = image.paint(&brushes, &palette);
+        image = image.paint(&brushes, &palette, &target, lod, i);
 
         // Render
         render(&mut canvas, &image, &mut brush_textures)?;
@@ -116,8 +111,10 @@ fn main() -> Result<(), String> {
         // Update
         i += 1;
         // save image
-        let buffer: &[u8] =
-            &canvas.read_pixels(Rect::from((0, 0, 1920, 1080)), PixelFormatEnum::ABGR8888)?;
+        let buffer: &[u8] = &canvas.read_pixels(
+            Rect::from((0, 0, target.dimensions.0, target.dimensions.1)),
+            PixelFormatEnum::ABGR8888,
+        )?;
 
         let mut name = format!("./rendered/image-{}.png", i);
         if i < 10 {
@@ -130,17 +127,21 @@ fn main() -> Result<(), String> {
 
         let diff = target.compare(buffer);
 
-        println!("{} {} {} {}", step, delta, diff, i);
-
         if diff >= delta {
             image.strokes.pop();
         }
 
-        if diff < delta {
+        if diff < delta && i > 1 {
+            last_increment = i;
             delta = diff;
             step += 1;
             // image::save_buffer(&Path::new(&name), buffer, 1920, 1080, ColorType::Rgba8)
             //     .expect("Could not save image");
+        }
+
+        if i - last_increment > 15 * 2 ^ i {
+            lod += 1;
+            last_increment = i;
         }
     }
 

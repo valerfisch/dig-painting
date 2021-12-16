@@ -9,6 +9,16 @@ use std::rc::Rc;
 
 use super::comparison::Target;
 
+const LOD: [std::ops::Range<f32>; 6] = [
+    (0.5..1.0),
+    (0.2..0.5),
+    (0.1..0.2),
+    (0.05..0.1),
+    (0.01..0.05),
+    (0.004..0.01),
+];
+const MIN_MAGNITUDE: [f32; 6] = [f32::MIN, 0.2, 0.3, 0.4, 0.5, 0.6];
+
 pub struct Palette {
     colors: Vec<Color>,
 }
@@ -67,19 +77,44 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn paint(mut self, brushes: &Vec<Brush>, palette: &Palette) -> Image {
+    pub fn paint(
+        mut self,
+        brushes: &Vec<Brush>,
+        palette: &Palette,
+        tar: &Target,
+        lod: usize,
+        i: usize,
+    ) -> Image {
         let mut rng = rand::thread_rng();
 
-        let stroke = Stroke {
-            position: Point::new(
+        let mut position = Point::new(
+            rng.gen_range(0..self.dimensions.0).try_into().unwrap(),
+            rng.gen_range(0..self.dimensions.1).try_into().unwrap(),
+        );
+
+        let mut magnitude =
+            tar.magnitudes[(position.y as u32 * self.dimensions.0 + position.x as u32) as usize];
+
+        while magnitude < MIN_MAGNITUDE[lod.min(5)] {
+            position = Point::new(
                 rng.gen_range(0..self.dimensions.0).try_into().unwrap(),
                 rng.gen_range(0..self.dimensions.1).try_into().unwrap(),
-            ),
-            rotation: rng.gen::<f64>(),
+            );
+
+            magnitude = tar.magnitudes
+                [(position.y as u32 * self.dimensions.0 + position.x as u32) as usize];
+        }
+
+        let rotation =
+            tar.angles[(position.y as u32 * self.dimensions.0 + position.x as u32) as usize];
+
+        let stroke = Stroke {
+            position,
+            rotation: (rotation * 2.0) as f64,
             // RGB
-            scale: rng.gen_range(0.5 as f32..1.25 as f32) / (2.0 as f32),
+            scale: rng.gen_range(LOD[lod.min(5)].clone()),
             color: palette.colors[rng.gen_range(0..palette.colors.len())].clone(),
-            opacity: rng.gen_range(0..185),
+            opacity: rng.gen_range(55..185),
         };
 
         let idx = rng.gen_range(0..brushes.len());
@@ -135,7 +170,7 @@ pub fn init_brushes() -> Vec<Brush> {
 pub fn init_image(target: &comparison::Target) -> Image {
     Image {
         strokes: Vec::new(),
-        color: Color::from((33, 33, 33)),
+        color: Color::from((127, 127, 127)),
         dimensions: (target.dimensions.0, target.dimensions.1),
     }
 }
@@ -143,15 +178,15 @@ pub fn init_image(target: &comparison::Target) -> Image {
 pub fn init_palette(tar: &Target) -> Palette {
     let mut colors: Vec<Color> = Vec::new();
 
-    let row_width = 100;
-    let col_height = 100;
+    let row_width = 50;
+    let col_height = 50;
 
-    let row_count = tar.dimensions.1 / 100;
-    let col_count = tar.dimensions.0 / 100;
+    let row_count = tar.dimensions.1 / 50;
+    let col_count = tar.dimensions.0 / 50;
 
     for row in 0..row_count {
         for col in 0..col_count {
-            let mut c = Color::RGB(0, 0, 0);
+            let mut c = Color::RGB(127, 127, 127);
             for y in 0..col_height {
                 for x in 0..row_width {
                     let x_pos = col * row_width + x;
