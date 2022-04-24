@@ -11,18 +11,19 @@ use super::comparison::Target;
 
 const LOD: [std::ops::Range<f32>; 6] = [
     (0.5..1.0),
-    (0.2..0.5),
+    (0.3..0.5),
+    (0.2..0.3),
     (0.1..0.2),
     (0.05..0.1),
-    (0.01..0.05),
-    (0.004..0.01),
+    (0.02..0.05),
 ];
-const MIN_MAGNITUDE: [f32; 6] = [f32::MIN, 0.2, 0.3, 0.4, 0.5, 0.6];
+const MIN_MAGNITUDE: [f32; 6] = [f32::MIN, 0.1, 0.5, 0.7, 0.8, 0.9];
 
 pub struct Palette {
     colors: Vec<Color>,
 }
 
+#[derive(Clone)]
 pub struct Brush {
     pub texture_path: String,
     pub dimensions: (u32, u32),
@@ -41,6 +42,7 @@ impl fmt::Display for Brush {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct Stroke {
     // top-left corner
     pub position: Point,
@@ -178,11 +180,11 @@ pub fn init_image(target: &comparison::Target) -> Image {
 pub fn init_palette(tar: &Target) -> Palette {
     let mut colors: Vec<Color> = Vec::new();
 
-    let row_width = 50;
-    let col_height = 50;
+    let row_width =  30;
+    let col_height = 30;
 
-    let row_count = tar.dimensions.1 / 50;
-    let col_count = tar.dimensions.0 / 50;
+    let row_count = tar.dimensions.1 / col_height;
+    let col_count = tar.dimensions.0 / row_width;
 
     for row in 0..row_count {
         for col in 0..col_count {

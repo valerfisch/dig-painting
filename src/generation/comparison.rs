@@ -1,6 +1,9 @@
+use crate::generation::artistic::Brush;
+use crate::generation::artistic::Stroke;
 use colors_transform::{Color, Rgb};
 use image::{GenericImageView, LumaA};
 use rayon::prelude::*;
+use std::rc::Rc;
 
 enum SobelType {
     Horizontal,
@@ -17,26 +20,50 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn compare(&self, buf: &[u8]) -> f64 {
-        let size: usize = (self.dimensions.0 * self.dimensions.1) as usize;
+    pub fn compare(&self, buf: &[u8], stroke: (Stroke, Rc<Brush>)) -> f64 {
+        let mut stroke_size = (std::cmp::max(
+            (stroke.1.dimensions.0 as f32 * stroke.0.scale) as u32,
+            (stroke.1.dimensions.1 as f32 * stroke.0.scale) as u32,
+        ), std::cmp::max(
+            (stroke.1.dimensions.0 as f32 * stroke.0.scale) as u32,
+            (stroke.1.dimensions.1 as f32 * stroke.0.scale) as u32,
+        ));
 
+        let x_offset = stroke.0.position.x as u32;
+        let y_offset = stroke.0.position.y as u32;
+
+        if x_offset + stroke_size.0 > self.dimensions.0 - 1
+        {
+            stroke_size.0 = self.dimensions.0 - 1 - x_offset
+        }
+
+        if y_offset + stroke_size.1 > self.dimensions.1 - 1
+        {
+            stroke_size.1 = 
+                self.dimensions.1 - 1 - y_offset
+        }
+
+        let size: u32 = stroke_size.0 * stroke_size.1;
         let delta: Vec<(f32, f32, f32)> = (0..size)
             .into_par_iter()
             .map(|i| -> (f32, f32, f32) {
-                let r = buf[(i * 4) as usize];
-                let g = buf[((i * 4) + 1) as usize];
-                let b = buf[((i * 4) + 2) as usize];
+                let y_min = (y_offset + (i / stroke_size.0)).min(self.dimensions.1 - 1);
+                let x_min = (x_offset + i % stroke_size.0).min(self.dimensions.0 - 1);
 
+                let offset = y_min * self.dimensions.0 + x_min;
+                let r = buf[(offset * 4_u32) as usize];
+                let g = buf[((offset * 4_u32) + 1) as usize];
+                let b = buf[((offset * 4_u32) + 2) as usize];
                 let hsl = Rgb::from(r as f32, g as f32, b as f32).to_hsl();
                 return (
-                    ((self.hsls[i as usize].0 - hsl.get_hue()) / 4.0).abs(),
-                    (self.hsls[i as usize].1 - hsl.get_saturation()).abs(),
-                    (self.hsls[i as usize].2 - hsl.get_lightness()).abs(),
+                    ((self.hsls[offset as usize].0 - hsl.get_hue()) / 4.0).abs(),
+                    (self.hsls[offset as usize].1 - hsl.get_saturation()).abs(),
+                    (self.hsls[offset as usize].2 - hsl.get_lightness()).abs(),
                 );
             })
             .collect();
 
-        let delta: Vec<f64> = (0..size)
+        let delta: Vec<f64> = (0..size as usize)
             .into_par_iter()
             .map(|i| -> f64 {
                 return delta[i].0 as f64 + delta[i].1 as f64 + delta[i].2 as f64;
@@ -50,7 +77,7 @@ impl Target {
 }
 
 pub fn open_target_image() -> Target {
-    let img = image::open("assets/targets/mona_lisa.jpg").expect("could not open target");
+    let img = image::open("assets/targets/portrait.jpg").expect("could not open target");
 
     let img_luma = img.clone().to_luma8();
     let img_rgba = img.to_rgba8();
