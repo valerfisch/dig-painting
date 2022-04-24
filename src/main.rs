@@ -102,7 +102,7 @@ fn main() -> Result<(), String> {
     let mut i = 0;
     let mut step = 0;
     let mut last_increment = 0;
-    let mut lod = 0;
+    let mut lod = 2;
     let mut placed = 0;
 
     let mut backup_canvas_buffer =  canvas.read_pixels(
