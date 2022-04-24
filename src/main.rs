@@ -1,3 +1,5 @@
+use chrono::{Datelike, Timelike, Utc};
+use image::ColorType;
 use sdl2::event::Event;
 use sdl2::image::{InitFlag, LoadTexture};
 use sdl2::keyboard::Keycode;
@@ -5,6 +7,8 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, WindowCanvas};
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::rc::Rc;
 
 mod generation;
@@ -81,12 +85,30 @@ fn main() -> Result<(), String> {
 
     let mut event_pump = sdl_context.event_pump()?;
 
-    let mut delta = f64::MAX;
+    let now = Utc::now();
+
+    let folder_name = format!(
+        "./rendered/{}-{:02}-{:02}_{:02}:{:02}:{:02}",
+        now.year(),
+        now.month(),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second(),
+    );
+
+    fs::create_dir(folder_name.clone());
 
     let mut i = 0;
     let mut step = 0;
     let mut last_increment = 0;
-    let mut lod = 2;
+    let mut lod = 0;
+    let mut placed = 0;
+
+    let mut backup_canvas_buffer =  canvas.read_pixels(
+        Rect::from((0, 0, target.dimensions.0, target.dimensions.1)),
+        PixelFormatEnum::ABGR8888,
+    )?;
 
     'running: loop {
         // Handle events
@@ -110,38 +132,72 @@ fn main() -> Result<(), String> {
 
         // Update
         i += 1;
+
+        
         // save image
-        let buffer: &[u8] = &canvas.read_pixels(
+        let stroke = image.strokes[image.strokes.len()-1].clone();
+
+        let buffer = canvas.read_pixels(
             Rect::from((0, 0, target.dimensions.0, target.dimensions.1)),
             PixelFormatEnum::ABGR8888,
         )?;
 
-        let mut name = format!("./rendered/image-{}.png", i);
-        if i < 10 {
-            name = format!("./rendered/image-000{}.png", i);
-        } else if i < 100 {
-            name = format!("./rendered/image-00{}.png", i);
-        } else if i < 1000 {
-            name = format!("./rendered/image-0{}.png", i);
-        }
-
-        let diff = target.compare(buffer);
+        let diff = target.compare(&buffer, stroke.clone());
+        let delta = target.compare(&backup_canvas_buffer, stroke.clone());
 
         if diff >= delta {
             image.strokes.pop();
+        } else {
+            placed = placed + 1;
+
+            backup_canvas_buffer.copy_from_slice(&buffer);
+
+            if i > 1 {
+                last_increment = i;
+                step += 1;
+            }
         }
 
-        if diff < delta && i > 1 {
-            last_increment = i;
-            delta = diff;
-            step += 1;
-            // image::save_buffer(&Path::new(&name), buffer, 1920, 1080, ColorType::Rgba8)
-            //     .expect("Could not save image");
+
+
+        if placed % 25 == 0 && i == last_increment {
+            let now = Utc::now();
+
+            let name = format!(
+                "{:02}:{:02}:{:02}",
+                now.hour(),
+                now.minute(),
+                now.second(),
+            );
+            let name = format!("{}/{}.png", folder_name, name);
+
+            image::save_buffer(
+                &Path::new(&name),
+                &buffer,
+                target.dimensions.0,
+                target.dimensions.1,
+                ColorType::Rgba8,
+            )
+            .expect("Could not save image");
         }
 
-        if i - last_increment > 15 * 2 ^ i {
+        if i > 1000 && i - last_increment > (15 * 2_i32.pow(lod as u32)) as usize {
             lod += 1;
             last_increment = i;
+        }
+
+        println!(
+            "{}, {}, {}, {}, {}, {}",
+            i,
+            lod,
+            delta - diff > 0.0,
+            i - last_increment,
+            (150 * 2_i32.pow(lod as u32)) as usize,
+            placed
+        );
+
+        if placed >= 5000 {
+            break;
         }
     }
 
