@@ -21,13 +21,38 @@ pub struct Target {
 
 impl Target {
     pub fn compare(&self, buf: &[u8], stroke: (Stroke, Rc<Brush>)) -> f64 {
-        let mut stroke_size = (std::cmp::max(
-            (stroke.1.dimensions.0 as f32 * stroke.0.scale) as u32,
-            (stroke.1.dimensions.1 as f32 * stroke.0.scale) as u32,
-        ), std::cmp::max(
-            (stroke.1.dimensions.0 as f32 * stroke.0.scale) as u32,
-            (stroke.1.dimensions.1 as f32 * stroke.0.scale) as u32,
-        ));
+
+        let center_position = ((stroke.1.dimensions.0 / 2) as f64, (stroke.1.dimensions.1 / 2) as f64 );
+        let angle = stroke.0.rotation;
+        let height = stroke.1.dimensions.1 as f64;
+        let width = stroke.1.dimensions.0 as f64;
+
+        let top_right = (
+            center_position.0 + ((width / 2.0) * angle.cos()) - ((height / 2.0) * angle.sin()),
+            center_position.1 + ((width / 2.0) * angle.sin()) + ((height / 2.0) * angle.cos())
+        );
+
+        let top_left = (
+            center_position.0 - ((width / 2.0) * angle.cos()) - ((height / 2.0) * angle.sin()),
+            center_position.1 - ((width / 2.0) * angle.sin()) + ((height / 2.0) * angle.cos())
+        );
+
+        let bottom_left = (
+            center_position.0 - ((width / 2.0) * angle.cos()) + ((height / 2.0) * angle.sin()),
+            center_position.1 - ((width / 2.0) * angle.sin()) - ((height / 2.0) * angle.cos())
+        );
+
+        let bottom_right = (
+            center_position.0 + ((width / 2.0) * angle.cos()) + ((height / 2.0) * angle.sin()),
+            center_position.1 + ((width / 2.0) * angle.sin()) - ((height / 2.0) * angle.cos())
+        );
+        
+        let x_min = top_left.0.min(top_right.0).min(bottom_left.0).min(bottom_right.0);
+        let y_min = top_left.1.min(top_right.1).min(bottom_left.1).min(bottom_right.1);
+        let x_max = top_left.0.max(top_right.0).max(bottom_left.0).max(bottom_right.0);
+        let y_max = top_left.1.max(top_right.1).max(bottom_left.1).max(bottom_right.1);
+
+        let mut stroke_size = (((x_max - x_min) as f32 * stroke.0.scale) as u32, ((y_max - y_min) as f32 * stroke.0.scale) as u32);
 
         let x_offset = stroke.0.position.x as u32;
         let y_offset = stroke.0.position.y as u32;
