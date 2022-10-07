@@ -3,6 +3,7 @@ use crate::generation::artistic::Stroke;
 use colors_transform::{Color, Rgb};
 use image::{GenericImageView, LumaA};
 use rayon::prelude::*;
+use std::f64::consts::PI;
 use std::rc::Rc;
 
 enum SobelType {
@@ -21,51 +22,38 @@ pub struct Target {
 
 impl Target {
     pub fn compare(&self, buf: &[u8], stroke: (Stroke, Rc<Brush>)) -> f64 {
+        let angle = -1.0 * stroke.0.rotation as f32;
+        let angle_radian = angle * (PI / 180.0) as f32;
+        let height = (stroke.1.dimensions.1 as f32 * stroke.0.scale) as f32;
+        let width = (stroke.1.dimensions.0 as f32 * stroke.0.scale) as f32;
 
-        let center_position = ((stroke.1.dimensions.0 / 2) as f64, (stroke.1.dimensions.1 / 2) as f64 );
-        let angle = stroke.0.rotation;
-        let height = stroke.1.dimensions.1 as f64;
-        let width = stroke.1.dimensions.0 as f64;
+        let rotated_width;
+        let rotated_height;
 
-        let top_right = (
-            center_position.0 + ((width / 2.0) * angle.cos()) - ((height / 2.0) * angle.sin()),
-            center_position.1 + ((width / 2.0) * angle.sin()) + ((height / 2.0) * angle.cos())
+        if 0.0 <= angle && angle <= 90.0 || 180.0 <= angle && angle <= 270.0 {
+            rotated_height = height * angle_radian.cos().abs() + width * angle_radian.sin().abs();
+            rotated_width = height * angle.sin().abs() + width * angle.cos().abs();
+        } else {
+            rotated_height = width * (angle_radian - (PI / 2.0) as f32).cos().abs()
+                + height * (angle_radian - (PI / 2.0)  as f32).sin().abs();
+            rotated_width = width * (angle_radian - (PI / 2.0)  as f32 ).sin().abs()
+                + height * (angle_radian - (PI / 2.0) as f32).cos().abs();
+        };
+
+        let mut stroke_size = (
+            (rotated_width as f32) as u32,
+            (rotated_height as f32) as u32,
         );
-
-        let top_left = (
-            center_position.0 - ((width / 2.0) * angle.cos()) - ((height / 2.0) * angle.sin()),
-            center_position.1 - ((width / 2.0) * angle.sin()) + ((height / 2.0) * angle.cos())
-        );
-
-        let bottom_left = (
-            center_position.0 - ((width / 2.0) * angle.cos()) + ((height / 2.0) * angle.sin()),
-            center_position.1 - ((width / 2.0) * angle.sin()) - ((height / 2.0) * angle.cos())
-        );
-
-        let bottom_right = (
-            center_position.0 + ((width / 2.0) * angle.cos()) + ((height / 2.0) * angle.sin()),
-            center_position.1 + ((width / 2.0) * angle.sin()) - ((height / 2.0) * angle.cos())
-        );
-        
-        let x_min = top_left.0.min(top_right.0).min(bottom_left.0).min(bottom_right.0);
-        let y_min = top_left.1.min(top_right.1).min(bottom_left.1).min(bottom_right.1);
-        let x_max = top_left.0.max(top_right.0).max(bottom_left.0).max(bottom_right.0);
-        let y_max = top_left.1.max(top_right.1).max(bottom_left.1).max(bottom_right.1);
-
-        let mut stroke_size = (((x_max - x_min) as f32 * stroke.0.scale) as u32, ((y_max - y_min) as f32 * stroke.0.scale) as u32);
 
         let x_offset = stroke.0.position.x as u32;
         let y_offset = stroke.0.position.y as u32;
 
-        if x_offset + stroke_size.0 > self.dimensions.0 - 1
-        {
+        if x_offset + stroke_size.0 > self.dimensions.0 - 1 {
             stroke_size.0 = self.dimensions.0 - 1 - x_offset
         }
 
-        if y_offset + stroke_size.1 > self.dimensions.1 - 1
-        {
-            stroke_size.1 = 
-                self.dimensions.1 - 1 - y_offset
+        if y_offset + stroke_size.1 > self.dimensions.1 - 1 {
+            stroke_size.1 = self.dimensions.1 - 1 - y_offset
         }
 
         let size: u32 = stroke_size.0 * stroke_size.1;
@@ -101,8 +89,8 @@ impl Target {
     }
 }
 
-pub fn open_target_image() -> Target {
-    let img = image::open("assets/targets/portrait.jpg").expect("could not open target");
+pub fn open_target_image(path: &str) -> Target {
+    let img = image::open(path).expect("could not open target");
 
     let img_luma = img.clone().to_luma8();
     let img_rgba = img.to_rgba8();
@@ -124,7 +112,11 @@ pub fn open_target_image() -> Target {
             let phi: f32 = (gy).atan2(gx);
 
             magnitudes.push(radius.powf(0.5));
-            angles.push(phi * std::f32::consts::PI / 2.0);
+            let mut angle = -(((phi * std::f32::consts::PI) * 180.0) % 180.0);
+            if angle > 0.0 {
+                angle = angle - 180.0;
+            }
+            angles.push(angle);
         }
     }
 

@@ -3,6 +3,7 @@ use image::ColorType;
 use sdl2::event::Event;
 use sdl2::image::{InitFlag, LoadTexture};
 use sdl2::keyboard::Keycode;
+use sdl2::libc::int64_t;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, WindowCanvas};
@@ -17,15 +18,19 @@ fn render(
     canvas: &mut WindowCanvas,
     image: &generation::artistic::Image,
     brush_textures: &mut HashMap<String, Texture>,
+    stop: usize,
 ) -> Result<(), String> {
     canvas.set_draw_color(image.color);
     canvas.clear();
 
     // let (width, height) = canvas.output_size()?;
 
+    let mut counter = 0;
+
     for i in &image.strokes {
-        let sprite = Rect::from_center(
-            i.0.position,
+        let sprite = Rect::new(
+            i.0.position.x,
+            i.0.position.y,
             (i.1.dimensions.0 as f32 * i.0.scale) as u32,
             (i.1.dimensions.1 as f32 * i.0.scale) as u32,
         );
@@ -41,20 +46,27 @@ fn render(
             &texture,
             None,
             sprite,
-            i.0.rotation * 360.0,
+            i.0.rotation,
             None,
             false,
             false,
         )?;
+
+        if counter >= stop {
+            break;
+        }
+
+        counter += 1;
     }
+
     canvas.present();
 
     Ok(())
 }
 
 fn main() -> Result<(), String> {
-    let target = generation::comparison::open_target_image();
-    let palette = generation::artistic::init_palette(&target);
+    let target = generation::comparison::open_target_image("assets/targets/valerie_1.jpg");
+    let palette = generation::artistic::init_palette("assets/targets/valerie_1.jpg");
 
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
@@ -102,10 +114,13 @@ fn main() -> Result<(), String> {
     let mut i = 0;
     let mut step = 0;
     let mut last_increment = 0;
-    let mut lod = 2;
+    let mut lod = 0;
     let mut placed = 0;
+    let mut next = false;
+    let mut run = false;
+    let mut storing = false;
 
-    let mut backup_canvas_buffer =  canvas.read_pixels(
+    let mut backup_canvas_buffer = canvas.read_pixels(
         Rect::from((0, 0, target.dimensions.0, target.dimensions.1)),
         PixelFormatEnum::ABGR8888,
     )?;
@@ -121,83 +136,104 @@ fn main() -> Result<(), String> {
                 } => {
                     break 'running;
                 }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Space),
+                    ..
+                } => {
+                    i += 1;
+                    next = true;
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::R),
+                    ..
+                } => {
+                    run = true;
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::P),
+                    ..
+                } => {
+                    storing = true;
+                }
                 _ => {}
             }
         }
 
-        image = image.paint(&brushes, &palette, &target, lod, i);
-
-        // Render
-        render(&mut canvas, &image, &mut brush_textures)?;
-
-        // Update
-        i += 1;
-
-        
-        // save image
-        let stroke = image.strokes[image.strokes.len()-1].clone();
-
-        let buffer = canvas.read_pixels(
-            Rect::from((0, 0, target.dimensions.0, target.dimensions.1)),
-            PixelFormatEnum::ABGR8888,
-        )?;
-
-        let diff = target.compare(&buffer, stroke.clone());
-        let delta = target.compare(&backup_canvas_buffer, stroke.clone());
-
-        if diff >= delta {
-            image.strokes.pop();
-        } else {
-            placed = placed + 1;
-
-            backup_canvas_buffer.copy_from_slice(&buffer);
-
-            if i > 1 {
-                last_increment = i;
-                step += 1;
+        if next || run {
+            if run {
+                i += 1;
             }
-        }
 
+            image = image.paint(&brushes, &palette, &target, lod);
 
+            // Render
+            render(&mut canvas, &image, &mut brush_textures, i)?;
 
-        if placed % 25 == 0 && i == last_increment {
-            let now = Utc::now();
+            // Update
+            // i += 1;
 
-            let name = format!(
-                "{:02}:{:02}:{:02}",
-                now.hour(),
-                now.minute(),
-                now.second(),
-            );
-            let name = format!("{}/{}.png", folder_name, name);
+            // save image
+            let stroke = image.strokes[image.strokes.len() - 1].clone();
 
-            image::save_buffer(
-                &Path::new(&name),
-                &buffer,
-                target.dimensions.0,
-                target.dimensions.1,
-                ColorType::Rgba8,
-            )
-            .expect("Could not save image");
-        }
+            let buffer = canvas.read_pixels(
+                Rect::from((0, 0, target.dimensions.0, target.dimensions.1)),
+                PixelFormatEnum::ABGR8888,
+            )?;
 
-        if i > 1000 && i - last_increment > (15 * 2_i32.pow(lod as u32)) as usize {
-            lod += 1;
-            last_increment = i;
-        }
+            let diff = target.compare(&buffer, stroke.clone());
+            let delta = target.compare(&backup_canvas_buffer, stroke.clone());
+
+            if diff >= delta {
+                image.strokes.pop();
+            } else {
+                placed = placed + 1;
+
+                backup_canvas_buffer.copy_from_slice(&buffer);
+
+                if i > 1 {
+                    last_increment = i;
+                    // step += 1;
+                }
+            }
+
+            if (placed % (lod.max(1) * 100) == 0 && i == last_increment  && storing) || placed == 50000 {
+                let now = Utc::now();
+
+                let name = format!("{:02}:{:02}:{:02}", now.hour(), now.minute(), now.second(),);
+                let name = format!("{}/{}.png", folder_name, name);
+
+                image::save_buffer(
+                    &Path::new(&name),
+                    &buffer,
+                    target.dimensions.0,
+                    target.dimensions.1,
+                    ColorType::Rgba8,
+                )
+                .expect("Could not save image");
+            }
+
+            if placed > 10 && i - last_increment > (2_i32.pow(lod as u32)) as usize && lod < 6 {
+                lod += 1;
+                last_increment = i;
+            }
 
         println!(
-            "{}, {}, {}, {}, {}, {}",
-            i,
+            "{}, {}, {}, {}, {}",
             lod,
+            step.max(i - last_increment),
+            (2_i32.pow(lod as u32)) as usize,
             delta - diff > 0.0,
-            i - last_increment,
-            (150 * 2_i32.pow(lod as u32)) as usize,
             placed
         );
 
-        if placed >= 5000 {
-            break;
+        if step < i - last_increment {
+            step = i - last_increment
+        }
+
+        if placed >= 50000 {
+                break;
+            }
+            next = false;
         }
     }
 
