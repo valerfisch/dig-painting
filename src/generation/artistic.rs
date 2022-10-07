@@ -17,7 +17,7 @@ const LOD: [std::ops::Range<f32>; 6] = [
     (0.05..0.1),
     (0.02..0.05),
 ];
-const MIN_MAGNITUDE: [f32; 6] = [f32::MIN, 0.1, 0.5, 0.7, 0.8, 0.9];
+const MIN_MAGNITUDE: [f32; 6] = [f32::MIN, 0.1, 0.3, 0.5, 0.6, 0.7];
 
 pub struct Palette {
     colors: Vec<Color>,
@@ -85,7 +85,6 @@ impl Image {
         palette: &Palette,
         tar: &Target,
         lod: usize,
-        i: usize,
     ) -> Image {
         let mut rng = rand::thread_rng();
 
@@ -109,17 +108,17 @@ impl Image {
 
         let rotation =
             tar.angles[(position.y as u32 * self.dimensions.0 + position.x as u32) as usize];
-
+            
+        let idx = rng.gen_range(0..brushes.len());
+        
         let stroke = Stroke {
             position,
-            rotation: (rotation * 2.0) as f64,
+            rotation: (rotation) as f64,
             // RGB
             scale: rng.gen_range(LOD[lod.min(5)].clone()),
             color: palette.colors[rng.gen_range(0..palette.colors.len())].clone(),
-            opacity: rng.gen_range(55..185),
+            opacity: rng.gen_range(55..180),
         };
-
-        let idx = rng.gen_range(0..brushes.len());
 
         let brush = Rc::new(Brush {
             texture_path: brushes[idx].texture_path.clone(),
@@ -177,14 +176,16 @@ pub fn init_image(target: &comparison::Target) -> Image {
     }
 }
 
-pub fn init_palette(tar: &Target) -> Palette {
+pub fn init_palette(path: &str) -> Palette {
+    let palett_src = image::open(path).expect("could not open target").to_rgba8();
+
     let mut colors: Vec<Color> = Vec::new();
 
-    let row_width =  30;
-    let col_height = 30;
+    let row_width =  50;
+    let col_height = 50;
 
-    let row_count = tar.dimensions.1 / col_height;
-    let col_count = tar.dimensions.0 / row_width;
+    let row_count = palett_src.dimensions().1 / col_height;
+    let col_count = palett_src.dimensions().0 / row_width;
 
     for row in 0..row_count {
         for col in 0..col_count {
@@ -193,7 +194,7 @@ pub fn init_palette(tar: &Target) -> Palette {
                 for x in 0..row_width {
                     let x_pos = col * row_width + x;
                     let y_pos = row * col_height + y;
-                    let image::Rgba(p) = tar.image.get_pixel(x_pos as u32, y_pos as u32);
+                    let image::Rgba(p) = palett_src.get_pixel(x_pos as u32, y_pos as u32);
                     let [mut r, mut g, mut b, _] = &p;
 
                     r = ((c.r as u16 + r as u16) / 2) as u8;
